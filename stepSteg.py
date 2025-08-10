@@ -4,155 +4,173 @@ import os.path
 
 # Convert Binary String into ASCII
 def binToAscii(binary):
-	return ''.join(chr(int(byte, 2)) for byte in re.findall(8*'.',binary))
+    return ''.join(chr(int(byte, 2)) for byte in re.findall(8*'.', binary))
 
-# Convert ASCII to binart
+# Convert ASCII to Binary
 def asciiToBin(ascii):
-	return ''.join(str(bin(ord(byte)))[2:].zfill(8) for byte in ascii)
+    return ''.join(str(bin(ord(byte)))[2:].zfill(8) for byte in ascii)
 
 # Return the LSB of a value
 def getLSB(value):
-	return str(bin(value))[-1]
+    return str(bin(value))[-1]
 
 # Alter the LSB of a value
 def setLSB(target, value):
-	binary = str(bin(target))[2:]
-	if binary[-1] != value:
-		binary = binary[:-1] + value
-	return int(binary, 2)
+    binary = str(bin(target))[2:].zfill(8)  # Ensure it's 8-bit binary
+    binary = binary[:-1] + value  # Replace LSB
+    return int(binary, 2)  # Convert back to integer
 
-# Hide Data within a PNG image
+# Hide Data within the Alpha channel of a PNG image
 def hide(img, data, outName):
-	# Header and trailer are used to identify start and end of hidden data
-	header, trailer = 2*"11001100",2*"0101010100000000"
-	dataBin = header+asciiToBin(data)+trailer
-	pixels, mode = list(img.getdata()), img.mode
-	newPixels = []
+    header, trailer = 2*"11001100", 2*"11001100"  # Headers to mark start & end
+    dataBin = header + asciiToBin(data) + trailer
+    pixels = list(img.getdata())  
+    newPixels = []
 
-	for i in range(len(dataBin)):
-		newPixel = list(pixels[i])
-		newPixel[i%len(mode)] = setLSB(newPixel[i%len(mode)], dataBin[i])
-		newPixels.append(tuple(newPixel))
+    data_index = 0  
 
-	newData = newPixels + pixels[len(newPixels):]
+    for i in range(len(pixels)):
+        newPixel = list(pixels[i])  
 
-	img.putdata(newData)
-	img.save(outName, "PNG")
-	print "[+] Output: " + outName
+        for channel in range(4):  
+            if data_index < len(dataBin):  
+                newPixel[channel] = setLSB(newPixel[channel], dataBin[data_index])
+                if data_index == 0:
+                    print(f"[DEBUG] First Bit Stored at Pixel {i}, Channel {channel}")
+                data_index += 1
 
-# Extract data from a carrier PNG image
+        newPixels.append(tuple(newPixel))
+
+    img.putdata(newPixels)
+    img.save(outName, "PNG")
+    print(f"[+] Hidden message saved to: {outName}")
+
+# Extract data from an image's Alpha channel
 def extract(img, outName):
-	# Header and trailer are used to identify start and end of hidden data
-	header, trailer = 2*"11001100",2*"0101010100000000"
-	binary, data, found = "", "", False
-	pixels, mode = list(img.getdata()), img.mode
+    header, trailer = 2*"11001100", 2*"11001100"  # Headers to find hidden data
+    binary, data, found = "", "", False
+    pixels = list(img.getdata())
 
-	for i in range(len(pixels)):
-		binary += getLSB(pixels[i][i%len(mode)])
-		if not found and len(binary) == len(header):
-			if binary != header:
-				print "[-] No Hidden Data Found!"
-				exit(0)
-			else:
-				found, binary = True, "";
-		if binary.endswith(trailer):
-			print "[+] Data Extracted: "
-			break
+    for pixel in pixels:
+        for channel in pixel:  # Read from R, G, B, A
+            binary += getLSB(channel)
 
-	data = binToAscii(binary)[:-4]
+        if not found and len(binary) >= len(header):
+            if binary[:len(header)] != header:
+                print("[-] No Hidden Data Found!")
+                exit(0)
+            else:
+                found = True
+                binary = binary[len(header):]  # Remove header from binary string
 
-	if outName != None:
-		outFile = open(outName, "wb")
-		outFile.write(data)
-		data = "[+] Written to file: " + outName
+        if found and binary.endswith(trailer):
+            print("[+] Data Extracted!")
+            break  
 
-	return data
+    data = binToAscii(binary[:-len(trailer)])  # Convert binary to ASCII
 
-# Confirm Data fits into Carrier file
+    if outName:
+        with open(outName, "wb") as outFile:
+            outFile.write(data.encode())  
+        data = f"[+] Written to file: {outName}"
+
+    return data
+
+# Confirm Data Fits in Carrier Image
 def fits(img, data): 
-	carrierSpace, dataSize = img.size[0]*img.size[1], 0
-	if data[1] == None: dataSize = len(data[0])*8
-	else: dataSize = int(str(os.path.getsize(data[1]))[:-1])*8
-	return dataSize < carrierSpace
+    carrierSpace = img.size[0] * img.size[1]  # Number of pixels
+    dataSize = len(data[0]) * 8 if data[1] is None else int(os.path.getsize(data[1])) * 8
+    return dataSize < carrierSpace
 
-# Error handeling
+# Error Handling
 def checkErrors(parser):
-	args = parser.parse_args()
-	if not os.path.exists(args.i): 
-		return parser.prog + ": error: No such file: " + args.i
-	img = Image.open(args.i)
-	if img.format != "PNG":
-		return parser.prog + ": error: Carrier file must be PNG: " + args.i
-	if img.mode not in ["RGB", "RGBA"]:
-		return parser.prog + ": error: Carrier file must be RGB(A): " + img.mode
-	if args.mode == "encrypt":
-		if args.D is None and args.d is None:
-			return parser.prog + ": error: Please provide some data!"
-		if args.D != None and not os.path.exists(args.D): 
-			return parser.prog + ": error: No such file: " + args.D
-		if not fits(img, [args.d, args.D]):
-			return parser.prog + ": error: Data too large for Carrier"
+    args = parser.parse_args()
+    if not os.path.exists(args.i): 
+        return f"{parser.prog}: error: No such file: {args.i}"
+    
+    img = Image.open(args.i)
 
-	return None
+    # Force RGBA
+    img = img.convert("RGBA")
+    img.save(args.i)
+    img = Image.open(args.i)
 
+    if img.format != "PNG":
+        return f"{parser.prog}: error: Carrier file must be PNG: {args.i} )({img.format})"
+    
+    if img.mode not in ["RGBA"]:  # Ensure Alpha channel exists
+        return f"{parser.prog}: error: Carrier file must be RGBA, not {img.mode}"
+    
+    if args.mode == "encrypt":
+        if args.D is None and args.d is None:
+            return f"{parser.prog}: error: Please provide some data!"
+        if args.D and not os.path.exists(args.D): 
+            return f"{parser.prog}: error: No such file: {args.D}"
+        if not fits(img, [args.d, args.D]):
+            return f"{parser.prog}: error: Data too large for Carrier"
+
+    return None
+
+# Main function
 def main():
-	# Setup argument handeling
-	parser = argparse.ArgumentParser(description="Hide data within an image!", version="1.0")
-	subparsers = parser.add_subparsers(dest="mode")
+    parser = argparse.ArgumentParser(description="Hide data within an image!")
+    subparsers = parser.add_subparsers(dest="mode")
 
-	parser_enc = subparsers.add_parser('encrypt')
-	parser_enc.add_argument('-i', help='Carrier file (.png Image)', metavar="<image>", required=True)
-	parser_enc.add_argument('-d', help='Data to be hidden (String)', metavar="<message>")
-	parser_enc.add_argument('-D', help='data to be hidden (file)', metavar="<file>")
-	parser_enc.add_argument('-o', help="Output filename", metavar="[output]")
-	parser_enc.usage="%(prog)s [-h] -i <image> (-d <message> | -D <file>) [-o output]"
-	parser_enc._optionals.title = "Arguments"
+    # Encrypt Mode
+    parser_enc = subparsers.add_parser('encrypt')
+    parser_enc.add_argument('-i', help='Carrier file (.png Image)', metavar="<image>", required=True)
+    parser_enc.add_argument('-d', help='Data to be hidden (String)', metavar="<message>")
+    parser_enc.add_argument('-D', help='Data to be hidden (file)', metavar="<file>")
+    parser_enc.add_argument('-o', help="Output filename", metavar="[output]")
+    parser_enc.usage = "%(prog)s [-h] -i <image> (-d <message> | -D <file>) [-o output]"
+    parser_enc._optionals.title = "Arguments"
 
-	parser_ext = subparsers.add_parser('extract')
-	parser_ext.add_argument('-i', help='Carrier file (.png Image)', metavar="<image>", required=True)
-	parser_ext.add_argument('-o', help="Output filename", metavar="[output]")
-	parser_ext.usage="%(prog)s [-h] -i <image> [-o output]"
-	parser_ext._optionals.title = "Arguments"
-	
-	parser.usage="\
-	%(prog)s encrypt [-h] -i <image> (-d <message> | -D <file>) [-o output]\n\
-	%(prog)s extract [-h] -i <image> [-o output]\n\
-	%(prog)s ([-h] | [--help] | [--version])"
+    # Extract Mode
+    parser_ext = subparsers.add_parser('extract')
+    parser_ext.add_argument('-i', help='Carrier file (.png Image)', metavar="<image>", required=True)
+    parser_ext.add_argument('-o', help="Output filename", metavar="[output]")
+    parser_ext.usage = "%(prog)s [-h] -i <image> [-o output]"
+    parser_ext._optionals.title = "Arguments"
 
-	parser._optionals.title = "Arguments"
-	args = parser.parse_args()
+    # Help Info
+    parser.usage = "\
+    %(prog)s encrypt [-h] -i <image> (-d <message> | -D <file>) [-o output]\n\
+    %(prog)s extract [-h] -i <image> [-o output]\n\
+    %(prog)s ([-h] | [--help] | [--version])"
 
-	# Check for argument errors
-	error = checkErrors(parser)
-	if error != None:
-		if args.mode == "encrypt": parser_enc.print_usage()
-		elif args.mode == "extract": parser_ext.print_usage()
-		else: parser.print_usage()
-		print error; exit(1)
+    parser._optionals.title = "Arguments"
+    args = parser.parse_args()
 
-	# Init encrypt mode
-	if args.mode == "encrypt":
-		print "[+] Hiding data in: " + args.i
-		if args.D != None:
-			with open(args.D, 'r') as dataFile: 
-				data = dataFile.read()
-		else: data = args.d
+    # Check for errors
+    error = checkErrors(parser)
+    if error:
+        if args.mode == "encrypt": parser_enc.print_usage()
+        elif args.mode == "extract": parser_ext.print_usage()
+        else: parser.print_usage()
+        print(error)
+        exit(1)
 
-		# Reformat output name if necessary
-		if args.o == None: outName = "output.png"
-		else: outName = (args.o+".").split(".")[0]+".png"
+    # Encrypt Mode
+    if args.mode == "encrypt":
+        print(f"[+] Hiding data in: {args.i}")
+        if args.D:
+            with open(args.D, 'r') as dataFile: 
+                data = dataFile.read()
+        else: 
+            data = args.d
 
-		img = Image.open(args.i)
-		# Call hide function
-		hide(img, data, outName)
+        # Set output filename
+        outName = "output.png" if args.o is None else (args.o + ".").split(".")[0] + ".png"
 
-	# Init extract mode
-	elif args.mode == "extract":
-		img = Image.open(args.i)
-		# Call extract function
-		print extract(img, args.o)
-	
-	exit(0)
+        img = Image.open(args.i).convert("RGBA")  # Ensure image has Alpha channel
+        hide(img, data, outName)
+
+    # Extract Mode
+    elif args.mode == "extract":
+        img = Image.open(args.i)
+        print(extract(img, args.o))
+
+    exit(0)
 
 if __name__ == "__main__":
-	main()
+    main()
