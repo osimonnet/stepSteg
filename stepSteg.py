@@ -101,7 +101,7 @@ def checkErrors(parser):
     if img.mode not in ["RGBA"]:  # Ensure Alpha channel exists
         return f"{parser.prog}: error: Carrier file must be RGBA, not {img.mode}"
     
-    if args.mode == "encrypt":
+    if args.mode == "encode":
         if args.D is None and args.d is None:
             return f"{parser.prog}: error: Please provide some data!"
         if args.D and not os.path.exists(args.D): 
@@ -116,8 +116,8 @@ def main():
     parser = argparse.ArgumentParser(description="Hide data within an image!")
     subparsers = parser.add_subparsers(dest="mode")
 
-    # Encrypt Mode
-    parser_enc = subparsers.add_parser('encrypt')
+    # Encode Mode
+    parser_enc = subparsers.add_parser('encode')
     parser_enc.add_argument('-i', help='Carrier file (.png Image)', metavar="<image>", required=True)
     parser_enc.add_argument('-d', help='Data to be hidden (String)', metavar="<message>")
     parser_enc.add_argument('-D', help='Data to be hidden (file)', metavar="<file>")
@@ -134,7 +134,7 @@ def main():
 
     # Help Info
     parser.usage = "\
-    %(prog)s encrypt [-h] -i <image> (-d <message> | -D <file>) [-o output]\n\
+    %(prog)s encode [-h] -i <image> (-d <message> | -D <file>) [-o output]\n\
     %(prog)s extract [-h] -i <image> [-o output]\n\
     %(prog)s ([-h] | [--help] | [--version])"
 
@@ -144,14 +144,14 @@ def main():
     # Check for errors
     error = checkErrors(parser)
     if error:
-        if args.mode == "encrypt": parser_enc.print_usage()
+        if args.mode == "encode": parser_enc.print_usage()
         elif args.mode == "extract": parser_ext.print_usage()
         else: parser.print_usage()
         print(error)
         exit(1)
 
-    # Encrypt Mode
-    if args.mode == "encrypt":
+    # Encode Mode
+    if args.mode == "encode":
         print(f"[+] Hiding data in: {args.i}")
         if args.D:
             with open(args.D, 'r') as dataFile: 
