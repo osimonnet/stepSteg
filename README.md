@@ -12,31 +12,30 @@ Command-line
 ------------
 ```
 > python stepSteg.py -h
-usage:  stepSteg.py encrypt [-h] -i <image> (-d <message> | -D <file>) [-o output]
-        stepSteg.py extract [-h] -i <image> [-o output]
-        stepSteg.py ([-h] | [--help] | [--version])
+usage:     stepsteg_blender.py encode [-h] -i <image> (-d <message> | -D <file>) [-o output]
+    stepsteg_blender.py extract [-h] -i <image> [-o output]
+    stepsteg_blender.py ([-h] | [--help] | [--version])
 
 Hide data within an image!
 
 positional arguments:
-  {encrypt,extract}
+  {encode,extract}
 
 Arguments:
-  -h, --help         show this help message and exit
-  -v, --version      show program's version number and exit
+  -h, --help        show this help message and exit
 
-> python stepSteg.py encrypt -h
-usage: stepSteg.py encrypt [-h] -i <image> (-d <message> | -D <file>) [-o output]
+> python stepSteg.py encode -h
+usage: stepsteg_blender.py encode [-h] -i <image> (-d <message> | -D <file>) [-o output]
 
 Arguments:
   -h, --help    show this help message and exit
   -i <image>    Carrier file (.png Image)
   -d <message>  Data to be hidden (String)
-  -D <file>     data to be hidden (file)
+  -D <file>     Data to be hidden (file)
   -o [output]   Output filename
 
 > python stepSteg.py extract -h
-usage: stepSteg.py extract [-h] -i <image> [-o output]
+usage: stepsteg_blender.py extract [-h] -i <image> [-o output]
 
 Arguments:
   -h, --help   show this help message and exit
@@ -45,11 +44,11 @@ Arguments:
 ```
 Hide message/file:
 ```
-> python stepSteg.py encrypt -i demo.png -d "I am a hidden message" -o hasSecretMsg.png
+> python stepSteg.py encode -i demo.png -d "I am a hidden message" -o hasSecretMsg.png
 [+] Hiding data in: demo.png
 [+] Output: hasSecretMsg.png
 
-> python stepSteg.py encrypt -i demo.png -D hiddenFile.zip -o hasSecretFile.png
+> python stepSteg.py encode -i demo.png -D hiddenFile.zip -o hasSecretFile.png
 [+] Hiding data in: demo.png
 [+] Output: hasSecretFile.png
 ```
